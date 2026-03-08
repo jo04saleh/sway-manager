@@ -23,8 +23,8 @@ const COUNTRIES = [
 
 const INIT_USERS = [
   { id: 1, name: "أحمد ناصر",   email: "owner@swaybar.com",     password: "Admin@2026!", role: "owner",   avatar: "أ", phone: "0599-100200", branch_id: null, created: "2024-01-01" },
-  { id: 2, name: "خالد عمر",    email: "palestine@swaybar.com", password: "Pal@2026!",   role: "manager", avatar: "خ", phone: "0598-300400", branch_id: 1,    created: "2024-03-15" },
-  { id: 3, name: "سامي الأحمد", email: "jordan@swaybar.com",    password: "Jor@2026!",   role: "manager", avatar: "س", phone: "0777-500600", branch_id: 2,    created: "2024-04-01" },
+  { id: 2, name: "ملاك ملحس",   email: "mlakmalhas@swaybar.com", password: "Mlak@1999s",  role: "manager", avatar: "م", phone: "", branch_id: 1, created: "2024-03-15" },
+  { id: 3, name: "ينال العاصي", email: "yanalassi@swaybar.com",  password: "Yanal@4525",  role: "manager", avatar: "ي", phone: "", branch_id: 2, created: "2024-04-01" },
 ];
 const INIT_BRANCHES = [
   { id: 1, name: "فلسطين - نابلس", country: "فلسطين", flag: "🇵🇸", currency: "ILS", symbol: "₪",   manager_id: 2 },
