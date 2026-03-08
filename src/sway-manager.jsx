@@ -216,8 +216,43 @@ select.fi option{background:${S3}}
 .co-flag{font-size:20px;display:block;margin-bottom:2px}
 .co-cur{font-size:9px;color:${MUTED};margin-top:1px}
 .cur-preview{background:rgba(201,146,10,0.07);border:1px solid rgba(201,146,10,0.22);border-radius:9px;padding:11px 14px;display:flex;align-items:center;gap:12px;margin-top:8px}
+/* ── MOBILE DRAWER ── */
+.mob-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,0.7);z-index:100;backdrop-filter:blur(3px)}
+.mob-menu-btn{display:none;background:none;border:none;color:${TEXT};font-size:22px;cursor:pointer;padding:4px 8px;border-radius:6px;transition:background .15s}
+.mob-menu-btn:hover{background:rgba(255,255,255,0.06)}
+.mob-close-btn{display:none;background:none;border:none;color:${MUTED};font-size:20px;cursor:pointer;padding:4px 8px;margin-right:auto}
+.bottom-nav{display:none;position:fixed;bottom:0;left:0;right:0;background:${S1};border-top:1px solid rgba(201,146,10,0.15);z-index:50;padding:6px 0 env(safe-area-inset-bottom,6px)}
+.bottom-nav-inner{display:flex;justify-content:space-around;align-items:center}
+.bn-item{display:flex;flex-direction:column;align-items:center;gap:2px;padding:6px 10px;cursor:pointer;border-radius:8px;transition:all .15s;color:${MUTED};min-width:52px}
+.bn-item.active{color:${GL}}
+.bn-item-ic{font-size:20px;line-height:1}
+.bn-item-lbl{font-size:9px;letter-spacing:.3px}
+.mob-more-menu{position:fixed;bottom:64px;left:0;right:0;background:${S1};border-top:1px solid rgba(201,146,10,0.15);z-index:60;padding:10px 16px;display:grid;grid-template-columns:repeat(4,1fr);gap:8px}
+.mob-more-item{display:flex;flex-direction:column;align-items:center;gap:4px;padding:10px 6px;cursor:pointer;border-radius:8px;transition:background .15s;color:${MUTED};font-size:12px;text-align:center}
+.mob-more-item:hover{background:rgba(255,255,255,0.04);color:${TEXT}}
+.mob-more-item.active{color:${GL}}
+.mob-more-item-ic{font-size:22px}
+
 @media(max-width:900px){.sg{grid-template-columns:1fr 1fr}.dg{grid-template-columns:1fr}.fg{grid-template-columns:1fr}.pg-grid{grid-template-columns:1fr}}
-@media(max-width:640px){.sidebar{display:none}.content{padding:12px}}
+@media(max-width:768px){
+  .sidebar{position:fixed;top:0;right:0;height:100vh;z-index:110;transform:translateX(100%);transition:transform .28s cubic-bezier(.4,0,.2,1);width:260px}
+  .sidebar.open{transform:translateX(0)}
+  .mob-overlay.open{display:block}
+  .mob-menu-btn{display:flex;align-items:center;justify-content:center}
+  .mob-close-btn{display:block}
+  .bottom-nav{display:block}
+  .content{padding:14px 14px 80px}
+  .sg{grid-template-columns:1fr 1fr}
+  .topbar{padding:0 14px}
+  .pg-title{font-size:15px}
+  .topbar-r .branch-info{display:none}
+}
+@media(max-width:480px){
+  .sg{grid-template-columns:1fr}
+  .auth-card{padding:28px 20px}
+  .fg{grid-template-columns:1fr}
+  .cg{grid-template-columns:repeat(3,1fr)}
+}
 `;
 
 function Toast({ msg, done }) {
@@ -651,19 +686,49 @@ function Reports({ branches, events, expenses }) {
 }
 
 // ── BRANCHES PAGE with auto-currency ─────────────────────────────────────────
-function BranchesPage({ branches, setBranches, users, toast }) {
-  const [show, setShow] = useState(false); const [selC, setSelC] = useState(null);
+function BranchesPage({ branches, setBranches, users, setUsers, toast }) {
+  const [show, setShow] = useState(false);
+  const [selC, setSelC] = useState(null);
+  const [mgrType, setMgrType] = useState("existing"); // existing | new
   const [f, setF] = useState({ name: "", manager_id: "" });
+  const [newMgr, setNewMgr] = useState({ name: "", email: "", password: "", phone: "" });
+  const [showPw, setShowPw] = useState(false);
+  const [err, setErr] = useState("");
   const managers = users.filter(u => u.role === "manager");
+  const str = pwStrength(newMgr.password);
 
   const selectCountry = (c) => {
     setSelC(c);
-    if (!f.name || f.name === "" || !f.name.includes(" - ")) setF(p => ({ ...p, name: `${c.name} - ` }));
+    if (!f.name) setF(p => ({ ...p, name: `${c.name} - ` }));
   };
+
+  const reset = () => { setShow(false); setSelC(null); setErr(""); setF({ name: "", manager_id: "" }); setNewMgr({ name: "", email: "", password: "", phone: "" }); setMgrType("existing"); };
+
   const save = () => {
-    if (!f.name || !selC) return;
-    setBranches(p => [...p, { id: Date.now(), name: f.name, country: selC.name, flag: selC.flag, currency: selC.currency, symbol: selC.symbol, manager_id: f.manager_id ? +f.manager_id : null }]);
-    toast("تمت إضافة الفرع"); setF({ name: "", manager_id: "" }); setSelC(null); setShow(false);
+    setErr("");
+    if (!f.name || !selC) { setErr("اختر البلد واسم الفرع"); return; }
+
+    let manager_id = null;
+
+    if (mgrType === "new") {
+      if (!newMgr.name || !newMgr.email || !newMgr.password) { setErr("أكمل بيانات المدير الجديد"); return; }
+      if (users.find(u => u.email === newMgr.email)) { setErr("البريد الإلكتروني مستخدم مسبقاً"); return; }
+      if (str.label === "ضعيفة") { setErr("كلمة سر المدير ضعيفة جداً"); return; }
+      const newUser = { id: Date.now(), name: newMgr.name, email: newMgr.email, password: newMgr.password, phone: newMgr.phone, role: "manager", avatar: newMgr.name.charAt(0), branch_id: null, created: new Date().toISOString().split("T")[0] };
+      setUsers(p => [...p, newUser]);
+      manager_id = newUser.id;
+    } else if (mgrType === "existing" && f.manager_id) {
+      manager_id = +f.manager_id;
+    }
+
+    const branch = { id: Date.now(), name: f.name, country: selC.name, flag: selC.flag, currency: selC.currency, symbol: selC.symbol, manager_id };
+    setBranches(p => [...p, branch]);
+
+    // ربط المدير الجديد بالفرع
+    if (manager_id) setUsers(p => p.map(u => u.id === manager_id ? { ...u, branch_id: branch.id } : u));
+
+    toast("تمت إضافة الفرع" + (mgrType === "new" ? " وإنشاء حساب المدير" : ""));
+    reset();
   };
 
   return (<div>
@@ -677,14 +742,18 @@ function BranchesPage({ branches, setBranches, users, toast }) {
             <div>البلد: <span style={{ color: TEXT }}>{br.country}</span></div>
             <div>العملة: <span style={{ color: GL, fontWeight: 700, fontSize: 14 }}>{br.currency} ({br.symbol})</span></div>
             {mgr && <div>المدير: <span style={{ color: TEXT }}>{mgr.name}</span></div>}
+            {!mgr && <div style={{ color: RED, fontSize: 11 }}>لا يوجد مدير</div>}
           </div>
           <button className="btn btn-outline" style={{ marginTop: 12, fontSize: 12 }}>✎ تعديل</button>
         </div>
       ); })}
     </div>
 
-    {show && <Modal title="🏢 إضافة فرع جديد" onClose={() => { setShow(false); setSelC(null); }}>
+    {show && <Modal title="🏢 إضافة فرع جديد" onClose={reset} wide>
       <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+        {err && <div className="auth-err">{err}</div>}
+
+        {/* اختيار البلد */}
         <div>
           <div className="fl2" style={{ marginBottom: 8 }}>اختر البلد — العملة ستتحدد تلقائياً *</div>
           <div className="cg">
@@ -697,23 +766,55 @@ function BranchesPage({ branches, setBranches, users, toast }) {
             ))}
           </div>
         </div>
-        {selC && (
-          <div className="cur-preview">
-            <span style={{ fontSize: 26 }}>{selC.flag}</span>
-            <div>
-              <div style={{ fontSize: 10, color: MUTED, marginBottom: 2 }}>العملة المحددة تلقائياً</div>
-              <div style={{ fontFamily: FH, fontSize: 20, color: GL, fontWeight: 700 }}>{selC.currency} <span style={{ fontSize: 14 }}>({selC.symbol})</span></div>
-            </div>
-            <span className="badge bg" style={{ marginRight: "auto" }}>✓ محدد</span>
+
+        {selC && <div className="cur-preview">
+          <span style={{ fontSize: 26 }}>{selC.flag}</span>
+          <div><div style={{ fontSize: 10, color: MUTED, marginBottom: 2 }}>العملة تلقائياً</div><div style={{ fontFamily: FH, fontSize: 18, color: GL, fontWeight: 700 }}>{selC.currency} ({selC.symbol})</div></div>
+          <span className="badge bg" style={{ marginRight: "auto" }}>✓</span>
+        </div>}
+
+        {/* اسم الفرع */}
+        <div className="fgr"><label className="fl2">اسم الفرع *</label><input className="fi" value={f.name} onChange={e => setF({ ...f, name: e.target.value })} placeholder="مثال: السعودية - جدة" /></div>
+
+        {/* قسم المدير */}
+        <div style={{ background: S2, borderRadius: 10, padding: "14px 16px", border: `1px solid rgba(255,255,255,0.055)` }}>
+          <div style={{ fontSize: 12, color: MUTED, marginBottom: 10, letterSpacing: 1 }}>المدير المسؤول</div>
+          <div style={{ display: "flex", gap: 8, marginBottom: 14 }}>
+            {[["existing","مدير موجود"],["new","مدير جديد"],["none","بدون مدير"]].map(([v,l]) => (
+              <button key={v} className={`btn ${mgrType===v?"btn-gold":"btn-ghost"}`} style={{ flex:1, justifyContent:"center", fontSize:12, padding:"7px 8px" }} onClick={() => setMgrType(v)}>{l}</button>
+            ))}
           </div>
-        )}
-        <div className="fg">
-          <div className="fgr" style={{ gridColumn: "1/-1" }}><label className="fl2">اسم الفرع *</label><input className="fi" value={f.name} onChange={e => setF({ ...f, name: e.target.value })} placeholder="مثال: السعودية - جدة" /></div>
-          <div className="fgr" style={{ gridColumn: "1/-1" }}><label className="fl2">المدير المسؤول</label><select className="fi" value={f.manager_id} onChange={e => setF({ ...f, manager_id: e.target.value })}><option value="">— بدون مدير —</option>{managers.map(u => <option key={u.id} value={u.id}>{u.name} ({u.email})</option>)}</select></div>
+
+          {mgrType === "existing" && (
+            <select className="fi" value={f.manager_id} onChange={e => setF({ ...f, manager_id: e.target.value })}>
+              <option value="">— اختر مديراً —</option>
+              {managers.map(u => <option key={u.id} value={u.id}>{u.name} ({u.email})</option>)}
+            </select>
+          )}
+
+          {mgrType === "new" && (
+            <div className="fg" style={{ marginTop: 4 }}>
+              <div className="fgr"><label className="fl2">الاسم الكامل *</label><input className="fi" value={newMgr.name} onChange={e => setNewMgr({...newMgr, name: e.target.value})} placeholder="اسم المدير" /></div>
+              <div className="fgr"><label className="fl2">رقم الهاتف</label><input className="fi" value={newMgr.phone} onChange={e => setNewMgr({...newMgr, phone: e.target.value})} placeholder="0599-000000" /></div>
+              <div className="fgr" style={{ gridColumn:"1/-1" }}><label className="fl2">البريد الإلكتروني *</label><input className="fi" value={newMgr.email} onChange={e => setNewMgr({...newMgr, email: e.target.value})} placeholder="manager@swaybar.com" /></div>
+              <div className="fgr" style={{ gridColumn:"1/-1" }}>
+                <label className="fl2">كلمة السر *</label>
+                <div className="fl-wrap">
+                  <input className="fi" type={showPw?"text":"password"} value={newMgr.password} onChange={e => setNewMgr({...newMgr, password: e.target.value})} placeholder="••••••••" style={{ paddingLeft:64 }} />
+                  <button className="fl-toggle" onClick={() => setShowPw(!showPw)}>{showPw?"إخفاء":"إظهار"}</button>
+                </div>
+                {newMgr.password && <><div className="pw-bar" style={{marginTop:5}}><div className="pw-fill" style={{width:`${str.pct}%`,background:str.color}}/></div><div className="pw-lbl" style={{color:str.color}}>القوة: {str.label}</div></>}
+              </div>
+              <div style={{ gridColumn:"1/-1", background:"rgba(74,158,224,0.06)", border:"1px solid rgba(74,158,224,0.16)", borderRadius:8, padding:"9px 13px", fontSize:12, color:BLUE }}>
+                ℹ سيتم إنشاء حساب للمدير تلقائياً وربطه بهذا الفرع
+              </div>
+            </div>
+          )}
         </div>
       </div>
+
       <div style={{ display: "flex", gap: 9, marginTop: 20, justifyContent: "flex-end" }}>
-        <button className="btn btn-ghost" onClick={() => { setShow(false); setSelC(null); }}>إلغاء</button>
+        <button className="btn btn-ghost" onClick={reset}>إلغاء</button>
         <button className="btn btn-gold" disabled={!selC || !f.name} onClick={save}>💾 إضافة الفرع</button>
       </div>
     </Modal>}
@@ -735,6 +836,8 @@ export default function App() {
   const [brId,        setBrId]      = useState(1);
   const [brMenu,      setBrMenu]    = useState(false);
   const [toastMsg,    setToastMsg]  = useState("");
+  const [sideOpen,    setSideOpen]  = useState(false);
+  const [moreOpen,    setMoreOpen]  = useState(false);
 
   useEffect(() => {
     if (currentUser) {
@@ -783,18 +886,51 @@ export default function App() {
       case "expenses":  return <Expenses  {...p} setExpenses={setExpenses} />;
       case "inventory": return <Inventory {...p} setInventory={setInventory} />;
       case "reports":   return <Reports   branches={branches} events={events} expenses={expenses} />;
-      case "branches":  return <BranchesPage branches={branches} setBranches={setBranches} users={users} toast={toast} />;
+      case "branches":  return <BranchesPage branches={branches} setBranches={setBranches} users={users} setUsers={setUsers} toast={toast} />;
       case "profile":   return <ProfilePage user={currentUser} users={users} setUsers={setUsers} branches={branches} toast={toast} />;
       default: return null;
     }
   };
 
+  const goPage = (p) => { setPage(p); setSideOpen(false); setMoreOpen(false); };
+  const BOT_NAV = [
+    { id: "dashboard", l: "الرئيسية", i: "⊡" },
+    { id: "events",    l: "الفعاليات", i: "🎉" },
+    { id: "clients",   l: "العملاء",  i: "👥" },
+    { id: "payments",  l: "المدفوعات", i: "💳" },
+  ];
+  const MORE_NAV = [
+    { id: "expenses",  l: "المصاريف",  i: "📊" },
+    { id: "inventory", l: "المخزون",   i: "📦" },
+    { id: "reports",   l: "التقارير",  i: "📈" },
+    ...(isOwner ? [{ id: "branches", l: "الفروع", i: "🏢" }] : []),
+    { id: "profile",   l: "حسابي",    i: "👤" },
+  ];
+
   return (
     <>
       <style>{CSS}</style>
       <div className="sway-root" dir="rtl">
-        <aside className="sidebar">
-          <div className="sb-logo"><div className="sb-logo-name">SWAY</div><div className="sb-logo-sub">Event Management</div></div>
+
+        {/* MOBILE OVERLAY */}
+        <div className={`mob-overlay${sideOpen ? " open" : ""}`} onClick={() => setSideOpen(false)} />
+
+        {/* MORE MENU (mobile) */}
+        {moreOpen && (
+          <div className="mob-more-menu" dir="rtl">
+            {MORE_NAV.map(n => (
+              <div key={n.id} className={`mob-more-item${page===n.id?" active":""}`} onClick={() => goPage(n.id)}>
+                <span className="mob-more-item-ic">{n.i}</span>{n.l}
+              </div>
+            ))}
+          </div>
+        )}
+
+        <aside className={`sidebar${sideOpen ? " open" : ""}`}>
+          <div className="sb-logo" style={{ display:"flex", alignItems:"center", justifyContent:"space-between" }}>
+            <div><div className="sb-logo-name">SWAY</div><div className="sb-logo-sub">Event Management</div></div>
+            <button className="mob-close-btn" onClick={() => setSideOpen(false)}>✕</button>
+          </div>
           <div className="br-badge" onClick={() => setBrMenu(!brMenu)}>
             <div className="br-badge-lbl">الفرع الحالي ▾</div>
             <div className="br-badge-name">{branch.flag} {branch.name}</div>
@@ -806,24 +942,45 @@ export default function App() {
             </div>)}
           </div>}
           <nav className="nav">
-            {NAV.map(n => <div key={n.id} className={`nav-it${page === n.id ? " active" : ""}`} onClick={() => setPage(n.id)}><span className="nav-ic">{n.i}</span>{n.l}</div>)}
+            {NAV.map(n => <div key={n.id} className={`nav-it${page === n.id ? " active" : ""}`} onClick={() => goPage(n.id)}><span className="nav-ic">{n.i}</span>{n.l}</div>)}
             <div style={{ borderTop: `1px solid ${DIM}`, margin: "6px 0" }} />
             <div className="nav-it" onClick={logout}><span className="nav-ic">⇠</span>تسجيل خروج</div>
           </nav>
-          <div className="sb-foot"><div className="user-pill" onClick={() => setPage("profile")}><div className="av" style={{ width: 32, height: 32, fontSize: 13 }}>{currentUser.avatar}</div><div><div style={{ fontSize: 13, fontWeight: 500 }}>{currentUser.name}</div><div style={{ fontSize: 10, color: MUTED }}>{isOwner ? "مالك النظام" : "مدير فرع"}</div></div></div></div>
+          <div className="sb-foot"><div className="user-pill" onClick={() => goPage("profile")}><div className="av" style={{ width: 32, height: 32, fontSize: 13 }}>{currentUser.avatar}</div><div><div style={{ fontSize: 13, fontWeight: 500 }}>{currentUser.name}</div><div style={{ fontSize: 10, color: MUTED }}>{isOwner ? "مالك النظام" : "مدير فرع"}</div></div></div></div>
         </aside>
+
         <main className="main">
           <header className="topbar">
-            <div className="pg-title">{TITLES[page]}</div>
+            <div style={{ display:"flex", alignItems:"center", gap:10 }}>
+              <button className="mob-menu-btn" onClick={() => { setSideOpen(true); setMoreOpen(false); }}>☰</button>
+              <div className="pg-title">{TITLES[page]}</div>
+            </div>
             <div className="topbar-r">
-              <span style={{ fontSize: 12, color: MUTED }}>{branch.flag} {branch.name}</span>
-              <span style={{ color: GL, fontSize: 13, fontWeight: 600 }}>{branch.currency}</span>
+              <span className="branch-info" style={{ fontSize: 12, color: MUTED }}>{branch.flag} {branch.name}</span>
+              <span className="branch-info" style={{ color: GL, fontSize: 13, fontWeight: 600 }}>{branch.currency}</span>
               <div style={{ width: 1, height: 16, background: DIM }} />
-              <div className="av" style={{ width: 30, height: 30, fontSize: 12, cursor: "pointer" }} onClick={() => setPage("profile")}>{currentUser.avatar}</div>
+              <div className="av" style={{ width: 30, height: 30, fontSize: 12, cursor: "pointer" }} onClick={() => goPage("profile")}>{currentUser.avatar}</div>
             </div>
           </header>
           <div className="content">{render()}</div>
         </main>
+
+        {/* BOTTOM NAV (mobile) */}
+        <nav className="bottom-nav">
+          <div className="bottom-nav-inner">
+            {BOT_NAV.map(n => (
+              <div key={n.id} className={`bn-item${page===n.id?" active":""}`} onClick={() => { goPage(n.id); setMoreOpen(false); }}>
+                <span className="bn-item-ic">{n.i}</span>
+                <span className="bn-item-lbl">{n.l}</span>
+              </div>
+            ))}
+            <div className={`bn-item${moreOpen?" active":""}`} onClick={() => setMoreOpen(!moreOpen)}>
+              <span className="bn-item-ic">⋯</span>
+              <span className="bn-item-lbl">المزيد</span>
+            </div>
+          </div>
+        </nav>
+
       </div>
       {toastMsg && <Toast msg={toastMsg} done={() => setToastMsg("")} />}
     </>
