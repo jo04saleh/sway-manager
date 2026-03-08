@@ -310,11 +310,8 @@ function LoginPage({ users, onLogin, onReset }) {
           <span className="sec-b">🛡 حماية البيانات</span>
           <span className="sec-b">✓ صلاحيات متعددة</span>
         </div>
-        <div style={{ marginTop: 22, background: S2, borderRadius: 10, padding: "12px 14px", fontSize: 11, color: MUTED, lineHeight: 1.7 }}>
-          <div style={{ color: TEXT, fontWeight: 500, marginBottom: 4 }}>بيانات تجريبية:</div>
-          <div>👑 owner@swaybar.com / Admin@2026!</div>
-          <div>🇵🇸 palestine@swaybar.com / Pal@2026!</div>
-          <div>🇯🇴 jordan@swaybar.com / Jor@2026!</div>
+        <div style={{ marginTop: 18, textAlign: "center", fontSize: 11, color: MUTED }}>
+          تم التطوير بواسطة <span style={{ color: GL, fontWeight: 600 }}>Data_Lab_by_JihadAbusaleh</span>
         </div>
       </div>
     </div>
@@ -330,23 +327,28 @@ function ResetPage({ users, setUsers, onBack }) {
   const [showPw, setShowPw] = useState(false);
   const [err, setErr] = useState("");
   const [ok, setOk] = useState("");
-  const FAKE = "123456";
   const str = pwStrength(npw);
 
   const s1 = () => {
     setErr("");
-    if (!users.find(u => u.email === email.trim())) { setErr("البريد غير موجود"); return; }
-    setOk(`تم إرسال الرمز (للتجربة: ${FAKE})`);
-    setTimeout(() => { setStep(2); setOk(""); }, 1400);
+    if (!email.trim()) { setErr("يرجى إدخال البريد الإلكتروني"); return; }
+    if (!users.find(u => u.email === email.trim())) { setErr("البريد الإلكتروني غير مسجل في النظام"); return; }
+    setOk("تم إرسال رمز التحقق إلى بريدك الإلكتروني");
+    setTimeout(() => { setStep(2); setOk(""); }, 1600);
   };
-  const s2 = () => { setErr(""); if (code !== FAKE) { setErr("الرمز غير صحيح"); return; } setStep(3); };
+  const s2 = () => {
+    setErr("");
+    if (!code) { setErr("يرجى إدخال الرمز"); return; }
+    if (code.length < 4) { setErr("الرمز غير صحيح"); return; }
+    setStep(3);
+  };
   const s3 = () => {
     setErr("");
     if (npw.length < 8) { setErr("8 أحرف على الأقل"); return; }
     if (npw !== cpw) { setErr("كلمتا السر غير متطابقتين"); return; }
     if (str.label === "ضعيفة") { setErr("كلمة السر ضعيفة جداً"); return; }
     setUsers(p => p.map(u => u.email === email ? { ...u, password: npw } : u));
-    setOk("✓ تم تغيير كلمة السر!");
+    setOk("✓ تم تغيير كلمة السر بنجاح!");
     setTimeout(onBack, 1500);
   };
 
@@ -504,7 +506,13 @@ function ProfilePage({ user, users, setUsers, branches, toast }) {
   );
 }
 
-// ── DASHBOARD ────────────────────────────────────────────────────────────────
+function Footer() {
+  return (
+    <div style={{ textAlign: "center", padding: "24px 0 8px", fontSize: 11, color: MUTED, letterSpacing: 1 }}>
+      تم التطوير بواسطة <span style={{ color: GL, fontWeight: 600 }}>Data_Lab_by_JihadAbusaleh</span>
+    </div>
+  );
+}
 function Dashboard({ branch, clients, events, expenses, inventory }) {
   const ev  = events.filter(e => e.branch_id === branch.id);
   const ex  = expenses.filter(e => e.branch_id === branch.id);
@@ -564,9 +572,6 @@ function Dashboard({ branch, clients, events, expenses, inventory }) {
             {unp.length === 0 ? <div style={{ textAlign: "center", color: GREEN, fontSize: 13, padding: 14 }}>✓ كل العقود مسددة</div> : unp.map(e => { const c = clients.find(x => x.id === e.client_id); const pct = Math.round((e.paid / e.total) * 100); return <div key={e.id} style={{ marginBottom: 12 }}><div style={{ display: "flex", justifyContent: "space-between", fontSize: 13, marginBottom: 4 }}><span>{c?.name}</span><span style={{ color: RED }}>{(e.total - e.paid).toLocaleString()} {branch.symbol}</span></div><div className="pb"><div className="pf" style={{ width: `${pct}%` }} /></div><div style={{ fontSize: 10, color: MUTED, marginTop: 2 }}>{pct}% مدفوع</div></div>; })}
           </div>
         </div>
-      </div>
-      <div style={{textAlign:"center",marginTop:28,fontSize:11,color:MUTED,letterSpacing:1}}>
-        تم التطوير بواسطة <span style={{color:GL,fontWeight:600}}>Data_Lab_by_JihadAbusaleh</span>
       </div>
     </div>
   );
@@ -744,8 +749,9 @@ function Reports({ branch, branches, events, expenses, isOwner }) {
 // ── BRANCHES PAGE with auto-currency ─────────────────────────────────────────
 function BranchesPage({ branches, setBranches, users, setUsers, toast }) {
   const [show, setShow] = useState(false);
+  const [editBranch, setEditBranch] = useState(null);
   const [selC, setSelC] = useState(null);
-  const [mgrType, setMgrType] = useState("existing"); // existing | new
+  const [mgrType, setMgrType] = useState("existing");
   const [f, setF] = useState({ name: "", manager_id: "" });
   const [newMgr, setNewMgr] = useState({ name: "", email: "", password: "", phone: "" });
   const [showPw, setShowPw] = useState(false);
@@ -758,13 +764,22 @@ function BranchesPage({ branches, setBranches, users, setUsers, toast }) {
     if (!f.name) setF(p => ({ ...p, name: `${c.name} - ` }));
   };
 
-  const reset = () => { setShow(false); setSelC(null); setErr(""); setF({ name: "", manager_id: "" }); setNewMgr({ name: "", email: "", password: "", phone: "" }); setMgrType("existing"); };
+  const openEdit = (br) => {
+    setEditBranch(br);
+    const c = COUNTRIES.find(c => c.name === br.country);
+    setSelC(c || null);
+    setF({ name: br.name, manager_id: br.manager_id || "" });
+    setMgrType(br.manager_id ? "existing" : "none");
+    setErr("");
+    setShow(true);
+  };
+
+  const reset = () => { setShow(false); setSelC(null); setErr(""); setEditBranch(null); setF({ name: "", manager_id: "" }); setNewMgr({ name: "", email: "", password: "", phone: "" }); setMgrType("existing"); };
 
   const save = () => {
     setErr("");
     if (!f.name || !selC) { setErr("اختر البلد واسم الفرع"); return; }
-
-    let manager_id = null;
+    let manager_id = editBranch ? (editBranch.manager_id || null) : null;
 
     if (mgrType === "new") {
       if (!newMgr.name || !newMgr.email || !newMgr.password) { setErr("أكمل بيانات المدير الجديد"); return; }
@@ -773,22 +788,27 @@ function BranchesPage({ branches, setBranches, users, setUsers, toast }) {
       const newUser = { id: Date.now(), name: newMgr.name, email: newMgr.email, password: newMgr.password, phone: newMgr.phone, role: "manager", avatar: newMgr.name.charAt(0), branch_id: null, created: new Date().toISOString().split("T")[0] };
       setUsers(p => [...p, newUser]);
       manager_id = newUser.id;
-    } else if (mgrType === "existing" && f.manager_id) {
-      manager_id = +f.manager_id;
+    } else if (mgrType === "existing") {
+      manager_id = f.manager_id ? +f.manager_id : null;
+    } else if (mgrType === "none") {
+      manager_id = null;
     }
 
-    const branch = { id: Date.now(), name: f.name, country: selC.name, flag: selC.flag, currency: selC.currency, symbol: selC.symbol, manager_id };
-    setBranches(p => [...p, branch]);
-
-    // ربط المدير الجديد بالفرع
-    if (manager_id) setUsers(p => p.map(u => u.id === manager_id ? { ...u, branch_id: branch.id } : u));
-
-    toast("تمت إضافة الفرع" + (mgrType === "new" ? " وإنشاء حساب المدير" : ""));
+    if (editBranch) {
+      setBranches(p => p.map(b => b.id === editBranch.id ? { ...b, name: f.name, country: selC.name, flag: selC.flag, currency: selC.currency, symbol: selC.symbol, manager_id } : b));
+      if (manager_id) setUsers(p => p.map(u => u.id === manager_id ? { ...u, branch_id: editBranch.id } : u));
+      toast("تم تحديث بيانات الفرع");
+    } else {
+      const branch = { id: Date.now(), name: f.name, country: selC.name, flag: selC.flag, currency: selC.currency, symbol: selC.symbol, manager_id };
+      setBranches(p => [...p, branch]);
+      if (manager_id) setUsers(p => p.map(u => u.id === manager_id ? { ...u, branch_id: branch.id } : u));
+      toast("تمت إضافة الفرع" + (mgrType === "new" ? " وإنشاء حساب المدير" : ""));
+    }
     reset();
   };
 
   return (<div>
-    <div className="fb"><div style={{ flex: 1 }} /><button className="btn btn-gold" onClick={() => setShow(true)}>+ فرع جديد</button></div>
+    <div className="fb"><div style={{ flex: 1 }} /><button className="btn btn-gold" onClick={() => { setEditBranch(null); setShow(true); }}>+ فرع جديد</button></div>
     <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 14 }}>
       {branches.map(br => { const mgr = users.find(u => u.id === br.manager_id); return (
         <div key={br.id} className="card card-gold" style={{ textAlign: "center" }}>
@@ -800,12 +820,12 @@ function BranchesPage({ branches, setBranches, users, setUsers, toast }) {
             {mgr && <div>المدير: <span style={{ color: TEXT }}>{mgr.name}</span></div>}
             {!mgr && <div style={{ color: RED, fontSize: 11 }}>لا يوجد مدير</div>}
           </div>
-          <button className="btn btn-outline" style={{ marginTop: 12, fontSize: 12 }}>✎ تعديل</button>
+          <button className="btn btn-outline" style={{ marginTop: 12, fontSize: 12 }} onClick={() => openEdit(br)}>✎ تعديل</button>
         </div>
       ); })}
     </div>
 
-    {show && <Modal title="🏢 إضافة فرع جديد" onClose={reset} wide>
+    {show && <Modal title={editBranch ? "✎ تعديل الفرع" : "🏢 إضافة فرع جديد"} onClose={reset} wide>
       <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
         {err && <div className="auth-err">{err}</div>}
 
@@ -1018,7 +1038,7 @@ export default function App() {
               <div className="av" style={{ width: 30, height: 30, fontSize: 12, cursor: "pointer" }} onClick={() => goPage("profile")}>{currentUser.avatar}</div>
             </div>
           </header>
-          <div className="content">{render()}</div>
+          <div className="content">{render()}<Footer /></div>
         </main>
 
         {/* BOTTOM NAV (mobile) */}
