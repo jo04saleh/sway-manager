@@ -30,28 +30,10 @@ const INIT_BRANCHES = [
   { id: 1, name: "فلسطين - نابلس", country: "فلسطين", flag: "🇵🇸", currency: "ILS", symbol: "₪",   manager_id: 2 },
   { id: 2, name: "الأردن - عمّان", country: "الأردن",  flag: "🇯🇴", currency: "JOD", symbol: "د.أ", manager_id: 3 },
 ];
-const INIT_CLIENTS = [
-  { id: 1, name: "أحمد محمود",   phone: "0599-123456", branch_id: 1, notes: "عميل VIP" },
-  { id: 2, name: "سارة الخطيب",  phone: "0598-654321", branch_id: 1, notes: "" },
-  { id: 3, name: "محمد العمري",  phone: "0777-111222", branch_id: 2, notes: "حفل كبير" },
-  { id: 4, name: "لينا حداد",    phone: "0796-333444", branch_id: 2, notes: "" },
-];
-const INIT_EVENTS = [
-  { id: 1, client_id: 1, date: "2026-03-15", time: "19:00", location: "قاعة الياسمين", zone: "نابلس",   status: "قادم",       total: 4500, paid: 2000, branch_id: 1, party1: "شركة SWAY للفعاليات", extras: "كاميرا، موسيقى", guests: "200", deposit: 2000 },
-  { id: 2, client_id: 2, date: "2026-03-20", time: "20:00", location: "قاعة الزهور",   zone: "رام الله", status: "مدفوع",      total: 3200, paid: 3200, branch_id: 1, party1: "شركة SWAY للفعاليات", extras: "طيران",          guests: "150", deposit: 3200 },
-  { id: 3, client_id: 3, date: "2026-03-25", time: "18:00", location: "قاعة النخيل",   zone: "عمّان",    status: "غير مدفوع",  total: 5800, paid: 1000, branch_id: 2, party1: "شركة SWAY للفعاليات", extras: "",               guests: "300", deposit: 1000 },
-  { id: 4, client_id: 4, date: "2026-04-05", time: "19:30", location: "قاعة الأميرة",  zone: "الزرقاء",  status: "قادم",       total: 6200, paid: 3000, branch_id: 2, party1: "شركة SWAY للفعاليات", extras: "ديكور",          guests: "250", deposit: 3000 },
-];
-const INIT_EXPENSES = [
-  { id: 1, type: "ديكور",    amount: 800,  event_id: 1,    note: "ورود وزينة",    branch_id: 1, date: "2026-03-10" },
-  { id: 2, type: "كهرباء",   amount: 200,  event_id: null, note: "فاتورة شهرية", branch_id: 1, date: "2026-03-01" },
-  { id: 3, type: "تجهيزات",  amount: 1200, event_id: 3,    note: "معدات صوت",    branch_id: 2, date: "2026-03-12" },
-];
-const INIT_INV = [
-  { id: 1, name: "طاولات دائرية", unit: "قطعة", min_qty: 10, branch_id: 1, ops: [{ type: "add", qty: 30, date: "2026-01-01" }, { type: "out", qty: 5, date: "2026-03-10" }] },
-  { id: 2, name: "كراسي بيضاء",  unit: "قطعة", min_qty: 50, branch_id: 1, ops: [{ type: "add", qty: 100, date: "2026-01-01" }, { type: "out", qty: 60, date: "2026-03-15" }] },
-  { id: 3, name: "أقمشة تنجيد",  unit: "متر",  min_qty: 20, branch_id: 2, ops: [{ type: "add", qty: 50, date: "2026-01-01" }, { type: "out", qty: 35, date: "2026-03-12" }] },
-];
+const INIT_CLIENTS  = [];
+const INIT_EVENTS   = [];
+const INIT_EXPENSES = [];
+const INIT_INV      = [];
 
 const calcQty = ops => ops.reduce((s, o) => o.type === "add" ? s + o.qty : s - o.qty, 0);
 
@@ -523,24 +505,34 @@ function ProfilePage({ user, users, setUsers, branches, toast }) {
 }
 
 // ── DASHBOARD ────────────────────────────────────────────────────────────────
-function Dashboard({ branch, clients, events, expenses }) {
-  const ev = events.filter(e => e.branch_id === branch.id);
-  const ex = expenses.filter(e => e.branch_id === branch.id);
+function Dashboard({ branch, clients, events, expenses, inventory }) {
+  const ev  = events.filter(e => e.branch_id === branch.id);
+  const ex  = expenses.filter(e => e.branch_id === branch.id);
+  const inv = inventory.filter(i => i.branch_id === branch.id);
   const rev = ev.reduce((s, e) => s + e.paid, 0);
   const exp = ex.reduce((s, e) => s + e.amount, 0);
   const prf = rev - exp;
   const up  = ev.filter(e => e.status === "قادم").slice(0, 5);
   const unp = ev.filter(e => e.status === "غير مدفوع");
-  const months = ["يناير","فبراير","مارس","أبريل","مايو","يونيو"];
-  const bars = [40, 65, 80, 55, 70, 90];
+
+  // إيرادات شهرية حقيقية من البيانات
+  const now = new Date();
+  const monthNames = ["يناير","فبراير","مارس","أبريل","مايو","يونيو","يوليو","أغسطس","سبتمبر","أكتوبر","نوفمبر","ديسمبر"];
+  const last6 = Array.from({length:6}, (_,i) => { const d = new Date(now.getFullYear(), now.getMonth()-5+i, 1); return { m: d.getMonth(), y: d.getFullYear(), label: monthNames[d.getMonth()].slice(0,3) }; });
+  const maxRev = Math.max(...last6.map(({m,y}) => ev.filter(e => { const d = new Date(e.date); return d.getMonth()===m && d.getFullYear()===y; }).reduce((s,e)=>s+e.paid,0)), 1);
+  const bars = last6.map(({m,y,label}) => ({ label, val: ev.filter(e => { const d = new Date(e.date); return d.getMonth()===m && d.getFullYear()===y; }).reduce((s,e)=>s+e.paid,0) }));
+
+  // تنبيهات المخزون الحقيقية
+  const lowInv = inv.filter(i => calcQty(i.ops) <= i.min_qty);
+
   return (
     <div>
       <div className="sg">
         {[
-          { l: "الإيرادات", v: `${rev.toLocaleString()} ${branch.symbol}`, c: "gold", i: "💰", s: "الشهر الحالي" },
-          { l: "المصاريف",  v: `${exp.toLocaleString()} ${branch.symbol}`, c: "red",  i: "📤", s: "الشهر الحالي" },
-          { l: "صافي الربح",v: `${prf.toLocaleString()} ${branch.symbol}`, c: prf >= 0 ? "green" : "red", i: "📈", s: "الشهر الحالي" },
-          { l: "الفعاليات", v: ev.length, c: "", i: "🎉", s: `${up.length} قادمة` },
+          { l: "الإيرادات",  v: `${rev.toLocaleString()} ${branch.symbol}`, c: "gold",  i: "💰", s: "إجمالي المدفوعات" },
+          { l: "المصاريف",   v: `${exp.toLocaleString()} ${branch.symbol}`, c: "red",   i: "📤", s: "إجمالي المصاريف" },
+          { l: "صافي الربح", v: `${prf.toLocaleString()} ${branch.symbol}`, c: prf >= 0 ? "green" : "red", i: "📈", s: "الإيرادات - المصاريف" },
+          { l: "الفعاليات",  v: ev.length, c: "", i: "🎉", s: `${up.length} قادمة • ${unp.length} غير مدفوعة` },
         ].map(s => (
           <div className="sc" key={s.l}><span className="sc-ico">{s.i}</span><div className="sc-lbl">{s.l}</div><div className={`sc-val ${s.c}`}>{s.v}</div><div className="sc-sub">{s.s}</div></div>
         ))}
@@ -549,20 +541,32 @@ function Dashboard({ branch, clients, events, expenses }) {
         <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
           <div className="card">
             <div className="sec-t">الفعاليات القادمة <span className="badge ba">{up.length}</span></div>
-            {up.length === 0 ? <div className="es"><div className="es-t">لا توجد فعاليات قادمة</div></div> : (
+            {up.length === 0 ? <div className="es"><div>🎉</div><div style={{marginTop:6}}>لا توجد فعاليات قادمة</div></div> : (
               <div className="tw"><table><thead><tr><th>العميل</th><th>التاريخ</th><th>الموقع</th><th>المبلغ</th></tr></thead><tbody>
                 {up.map(e => { const c = clients.find(x => x.id === e.client_id); return <tr key={e.id}><td style={{ fontWeight: 500 }}>{c?.name}</td><td style={{ color: GL }}>{e.date}</td><td style={{ color: MUTED }}>{e.location}</td><td>{e.total.toLocaleString()} {branch.symbol}</td></tr>; })}
               </tbody></table></div>
             )}
           </div>
-          <div className="card"><div className="sec-t">الإيرادات الشهرية</div><div className="bc">{months.map((m, i) => <div className="bw" key={m}><div className="bar" style={{ height: `${bars[i]}%` }} /><div className="bar-l">{m.slice(0,3)}</div></div>)}</div></div>
+          <div className="card">
+            <div className="sec-t">الإيرادات الشهرية</div>
+            {rev === 0 ? <div className="es" style={{padding:20}}><div style={{fontSize:12,color:MUTED}}>لا توجد بيانات بعد</div></div> : (
+              <div className="bc">{bars.map(b => <div className="bw" key={b.label}><div className="bar" style={{ height: `${Math.max(4, Math.round((b.val/maxRev)*100))}%` }} /><div className="bar-l">{b.label}</div></div>)}</div>
+            )}
+          </div>
         </div>
         <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-          <div className="card card-gold"><div className="sec-t">⚠️ تنبيهات</div>{[{ n: "كراسي بيضاء", q: 40, m: 50 }, { n: "أقمشة تنجيد", q: 15, m: 20 }].map(x => <div className="al" key={x.n}><div className="ald" style={{ background: x.q < x.m ? RED : GL }} /><div><div style={{ fontSize: 13 }}>{x.n}</div><div style={{ fontSize: 11, color: MUTED }}>{x.q}/{x.m}</div></div></div>)}</div>
-          <div className="card"><div className="sec-t">عقود غير مدفوعة</div>
+          <div className="card card-gold">
+            <div className="sec-t">⚠️ تنبيهات المخزون</div>
+            {lowInv.length === 0 ? <div style={{textAlign:"center",color:GREEN,fontSize:13,padding:14}}>✓ المخزون بمستوى جيد</div> : lowInv.map(x => { const q = calcQty(x.ops); return <div className="al" key={x.id}><div className="ald" style={{ background: RED }} /><div><div style={{ fontSize: 13 }}>{x.name}</div><div style={{ fontSize: 11, color: MUTED }}>{q}/{x.min_qty} {x.unit}</div></div></div>; })}
+          </div>
+          <div className="card">
+            <div className="sec-t">عقود غير مدفوعة</div>
             {unp.length === 0 ? <div style={{ textAlign: "center", color: GREEN, fontSize: 13, padding: 14 }}>✓ كل العقود مسددة</div> : unp.map(e => { const c = clients.find(x => x.id === e.client_id); const pct = Math.round((e.paid / e.total) * 100); return <div key={e.id} style={{ marginBottom: 12 }}><div style={{ display: "flex", justifyContent: "space-between", fontSize: 13, marginBottom: 4 }}><span>{c?.name}</span><span style={{ color: RED }}>{(e.total - e.paid).toLocaleString()} {branch.symbol}</span></div><div className="pb"><div className="pf" style={{ width: `${pct}%` }} /></div><div style={{ fontSize: 10, color: MUTED, marginTop: 2 }}>{pct}% مدفوع</div></div>; })}
           </div>
         </div>
+      </div>
+      <div style={{textAlign:"center",marginTop:28,fontSize:11,color:MUTED,letterSpacing:1}}>
+        تم التطوير بواسطة <span style={{color:GL,fontWeight:600}}>Data_Lab_by_JihadAbusaleh</span>
       </div>
     </div>
   );
@@ -570,14 +574,52 @@ function Dashboard({ branch, clients, events, expenses }) {
 
 // ── CLIENTS ──────────────────────────────────────────────────────────────────
 function Clients({ branch, clients, setClients, toast }) {
-  const [s, setS] = useState(""); const [show, setShow] = useState(false);
+  const [s, setS] = useState("");
+  const [show, setShow] = useState(false);
+  const [editing, setEditing] = useState(null);
   const [f, setF] = useState({ name: "", phone: "", notes: "" });
-  const list = clients.filter(c => c.branch_id === branch.id && (c.name.includes(s) || c.phone.includes(s)));
-  const save = () => { if (!f.name) return; setClients(p => [...p, { ...f, id: Date.now(), branch_id: branch.id }]); toast("تمت إضافة العميل"); setF({ name: "", phone: "", notes: "" }); setShow(false); };
+  const list = clients.filter(c => c.branch_id === branch.id && (c.name.includes(s) || (c.phone||"").includes(s)));
+
+  const openAdd  = () => { setEditing(null); setF({ name: "", phone: "", notes: "" }); setShow(true); };
+  const openEdit = (c) => { setEditing(c); setF({ name: c.name, phone: c.phone||"", notes: c.notes||"" }); setShow(true); };
+  const save = () => {
+    if (!f.name) return;
+    if (editing) {
+      setClients(p => p.map(c => c.id === editing.id ? { ...c, ...f } : c));
+      toast("تم تحديث بيانات العميل");
+    } else {
+      setClients(p => [...p, { ...f, id: Date.now(), branch_id: branch.id }]);
+      toast("تمت إضافة العميل");
+    }
+    setShow(false);
+  };
+  const del = (id) => { if (window.confirm("هل تريد حذف هذا العميل؟")) { setClients(p => p.filter(c => c.id !== id)); toast("تم حذف العميل"); }};
+
   return (<div>
-    <div className="fb"><input className="si" placeholder="🔍 بحث..." value={s} onChange={e => setS(e.target.value)} /><button className="btn btn-gold" onClick={() => setShow(true)}>+ عميل</button></div>
-    <div className="card"><div className="tw"><table><thead><tr><th>#</th><th>الاسم</th><th>الهاتف</th><th>ملاحظات</th></tr></thead><tbody>{list.map((c, i) => <tr key={c.id}><td style={{ color: MUTED }}>{i+1}</td><td style={{ fontWeight: 500 }}>{c.name}</td><td style={{ color: GL }}>{c.phone}</td><td style={{ color: MUTED, fontSize: 12 }}>{c.notes || "—"}</td></tr>)}</tbody></table>{list.length === 0 && <div className="es"><div>👥</div><div>لا يوجد عملاء</div></div>}</div></div>
-    {show && <Modal title="+ إضافة عميل" onClose={() => setShow(false)}><div className="fg"><div className="fgr"><label className="fl2">الاسم *</label><input className="fi" value={f.name} onChange={e => setF({ ...f, name: e.target.value })} /></div><div className="fgr"><label className="fl2">الهاتف</label><input className="fi" value={f.phone} onChange={e => setF({ ...f, phone: e.target.value })} /></div><div className="fgr" style={{ gridColumn: "1/-1" }}><label className="fl2">ملاحظات</label><input className="fi" value={f.notes} onChange={e => setF({ ...f, notes: e.target.value })} /></div></div><div style={{ display: "flex", gap: 9, marginTop: 16, justifyContent: "flex-end" }}><button className="btn btn-ghost" onClick={() => setShow(false)}>إلغاء</button><button className="btn btn-gold" onClick={save}>💾 حفظ</button></div></Modal>}
+    <div className="fb"><input className="si" placeholder="🔍 بحث..." value={s} onChange={e => setS(e.target.value)} /><button className="btn btn-gold" onClick={openAdd}>+ عميل</button></div>
+    <div className="card"><div className="tw"><table><thead><tr><th>#</th><th>الاسم</th><th>الهاتف</th><th>ملاحظات</th><th></th></tr></thead><tbody>
+      {list.map((c, i) => <tr key={c.id}>
+        <td style={{ color: MUTED }}>{i+1}</td>
+        <td style={{ fontWeight: 500 }}>{c.name}</td>
+        <td style={{ color: GL }}>{c.phone||"—"}</td>
+        <td style={{ color: MUTED, fontSize: 12 }}>{c.notes || "—"}</td>
+        <td style={{ display:"flex", gap:5 }}>
+          <button className="btn btn-ghost" style={{padding:"4px 9px",fontSize:11}} onClick={() => openEdit(c)}>✎</button>
+          <button className="btn" style={{padding:"4px 9px",fontSize:11,background:"rgba(224,82,82,0.1)",color:RED,border:"none"}} onClick={() => del(c.id)}>🗑</button>
+        </td>
+      </tr>)}
+    </tbody></table>{list.length === 0 && <div className="es"><div>👥</div><div style={{marginTop:6}}>لا يوجد عملاء في هذا الفرع</div></div>}</div></div>
+    {show && <Modal title={editing ? "✎ تعديل العميل" : "+ إضافة عميل"} onClose={() => setShow(false)}>
+      <div className="fg">
+        <div className="fgr"><label className="fl2">الاسم *</label><input className="fi" value={f.name} onChange={e => setF({ ...f, name: e.target.value })} /></div>
+        <div className="fgr"><label className="fl2">الهاتف</label><input className="fi" value={f.phone} onChange={e => setF({ ...f, phone: e.target.value })} /></div>
+        <div className="fgr" style={{ gridColumn: "1/-1" }}><label className="fl2">ملاحظات</label><input className="fi" value={f.notes} onChange={e => setF({ ...f, notes: e.target.value })} /></div>
+      </div>
+      <div style={{ display: "flex", gap: 9, marginTop: 16, justifyContent: "flex-end" }}>
+        <button className="btn btn-ghost" onClick={() => setShow(false)}>إلغاء</button>
+        <button className="btn btn-gold" onClick={save}>💾 حفظ</button>
+      </div>
+    </Modal>}
   </div>);
 }
 
@@ -596,14 +638,25 @@ function Events({ branch, clients, events, setEvents, toast }) {
     setEvents(p => [...p, ev]); toast("تمت إضافة الفعالية وتوليد العقد"); setContract(ev); setShowAdd(false);
     setF({ client_id: "", date: "", time: "", location: "", zone: "", total: "", deposit: "", party1: "شركة SWAY للفعاليات", extras: "", guests: "" });
   };
+  const del = (id) => { if (window.confirm("هل تريد حذف هذه الفعالية؟ سيتم حذف العقد المرتبط بها أيضاً.")) { setEvents(p => p.filter(e => e.id !== id)); toast("تم حذف الفعالية"); }};
   return (<div>
     <div style={{ display: "flex", gap: 9, marginBottom: 16, alignItems: "center", flexWrap: "wrap" }}>
       <div className="tabs">{["الكل","قادم","مدفوع","غير مدفوع"].map(s => <div key={s} className={`tab${filter===s?" active":""}`} onClick={() => setFilter(s)}>{s}</div>)}</div>
       <div style={{ flex: 1 }} /><button className="btn btn-gold" onClick={() => setShowAdd(true)}>+ فعالية جديدة</button>
     </div>
-    <div className="card"><div className="tw"><table><thead><tr><th>العميل</th><th>التاريخ</th><th>الوقت</th><th>الموقع</th><th>المبلغ</th><th>الحالة</th><th>العقد</th></tr></thead><tbody>
-      {filtered.map(e => { const c = clients.find(x => x.id === e.client_id); return <tr key={e.id}><td style={{ fontWeight: 500 }}>{c?.name}</td><td style={{ color: GL }}>{e.date}</td><td style={{ color: MUTED }}>{e.time}</td><td>{e.location}</td><td>{e.total.toLocaleString()} {branch.symbol}</td><td><SBadge s={e.status} /></td><td><button className="btn btn-outline" style={{ padding: "3px 9px", fontSize: 12 }} onClick={() => setContract(e)}>📄 عرض</button></td></tr>; })}
-    </tbody></table>{filtered.length === 0 && <div className="es"><div>🎉</div><div>لا توجد فعاليات</div></div>}</div></div>
+    <div className="card"><div className="tw"><table><thead><tr><th>العميل</th><th>التاريخ</th><th>الموقع</th><th>المبلغ</th><th>الحالة</th><th></th></tr></thead><tbody>
+      {filtered.map(e => { const c = clients.find(x => x.id === e.client_id); return <tr key={e.id}>
+        <td style={{ fontWeight: 500 }}>{c?.name}</td>
+        <td style={{ color: GL }}>{e.date}</td>
+        <td>{e.location}</td>
+        <td>{e.total.toLocaleString()} {branch.symbol}</td>
+        <td><SBadge s={e.status} /></td>
+        <td style={{ display:"flex", gap:5 }}>
+          <button className="btn btn-outline" style={{ padding: "3px 9px", fontSize: 12 }} onClick={() => setContract(e)}>📄</button>
+          <button className="btn" style={{padding:"3px 9px",fontSize:12,background:"rgba(224,82,82,0.1)",color:RED,border:"none"}} onClick={() => del(e.id)}>🗑</button>
+        </td>
+      </tr>; })}
+    </tbody></table>{filtered.length === 0 && <div className="es"><div>🎉</div><div style={{marginTop:6}}>لا توجد فعاليات</div></div>}</div></div>
     {showAdd && <Modal title="🎉 فعالية جديدة" onClose={() => setShowAdd(false)} wide><div className="fg"><div className="fgr" style={{ gridColumn: "1/-1" }}><label className="fl2">العميل *</label><select className="fi" value={f.client_id} onChange={e => setF({ ...f, client_id: e.target.value })}><option value="">— اختر —</option>{brCl.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}</select></div><div className="fgr"><label className="fl2">التاريخ *</label><input className="fi" type="date" value={f.date} onChange={e => setF({ ...f, date: e.target.value })} /></div><div className="fgr"><label className="fl2">الوقت</label><input className="fi" type="time" value={f.time} onChange={e => setF({ ...f, time: e.target.value })} /></div><div className="fgr"><label className="fl2">القاعة</label><input className="fi" value={f.location} onChange={e => setF({ ...f, location: e.target.value })} /></div><div className="fgr"><label className="fl2">المنطقة</label><input className="fi" value={f.zone} onChange={e => setF({ ...f, zone: e.target.value })} /></div><div className="fgr"><label className="fl2">المبلغ الإجمالي</label><input className="fi" type="number" value={f.total} onChange={e => setF({ ...f, total: e.target.value })} /></div><div className="fgr"><label className="fl2">العربون</label><input className="fi" type="number" value={f.deposit} onChange={e => setF({ ...f, deposit: e.target.value })} /></div><div className="fgr"><label className="fl2">عدد الأشخاص</label><input className="fi" value={f.guests} onChange={e => setF({ ...f, guests: e.target.value })} /></div><div className="fgr"><label className="fl2">الطرف الأول</label><input className="fi" value={f.party1} onChange={e => setF({ ...f, party1: e.target.value })} /></div><div className="fgr" style={{ gridColumn: "1/-1" }}><label className="fl2">الخدمات الإضافية</label><input className="fi" value={f.extras} onChange={e => setF({ ...f, extras: e.target.value })} /></div></div><div style={{ display: "flex", gap: 9, marginTop: 18, justifyContent: "flex-end" }}><button className="btn btn-ghost" onClick={() => setShowAdd(false)}>إلغاء</button><button className="btn btn-gold" onClick={save}>📄 حفظ وتوليد العقد</button></div></Modal>}
     {contract && <Modal title="📄 عقد الفعالية" onClose={() => setContract(null)} wide>
       <div className="cp"><div style={{ textAlign: "center", marginBottom: 16 }}><span style={{ fontFamily: FH, fontSize: 18, fontWeight: 700, color: G, display: "block" }}>عقد خدمات تنظيم حفل</span><div style={{ fontSize: 12, color: "#888", marginTop: 3 }}>تاريخ الإصدار: {new Date().toLocaleDateString("ar")}</div></div>
@@ -665,9 +718,10 @@ function Inventory({ branch, events, clients, inventory, setInventory, toast }) 
 }
 
 // ── REPORTS ──────────────────────────────────────────────────────────────────
-function Reports({ branches, events, expenses }) {
+function Reports({ branch, branches, events, expenses, isOwner }) {
+  const visBranches = isOwner ? branches : branches.filter(b => b.id === branch.id);
   return (<div style={{ display: "grid", gridTemplateColumns: "repeat(2,1fr)", gap: 16 }}>
-    {branches.map(br => {
+    {visBranches.map(br => {
       const brEv = events.filter(e => e.branch_id === br.id); const brEx = expenses.filter(e => e.branch_id === br.id);
       const rev = brEv.reduce((s, e) => s + e.paid, 0); const exp = brEx.reduce((s, e) => s + e.amount, 0); const prf = rev - exp;
       const pct = rev > 0 ? Math.max(0, Math.round((prf / rev) * 100)) : 0;
@@ -679,9 +733,11 @@ function Reports({ branches, events, expenses }) {
           <hr className="div" style={{ margin: "3px 0" }} />
           <div style={{ display: "flex", justifyContent: "space-between" }}><span style={{ fontWeight: 600 }}>صافي الربح</span><span style={{ color: prf >= 0 ? GREEN : RED, fontWeight: 700, fontSize: 16 }}>{prf.toLocaleString()} {br.symbol}</span></div>
           <div style={{ marginTop: 4 }}><div style={{ display: "flex", justifyContent: "space-between", fontSize: 10, color: MUTED, marginBottom: 3 }}><span>نسبة الربح</span><span>{pct}%</span></div><div className="pb"><div className="pf" style={{ width: `${pct}%` }} /></div></div>
+          <div style={{fontSize:11,color:MUTED,marginTop:4}}>عدد الفعاليات: <span style={{color:TEXT}}>{brEv.length}</span> • عدد العملاء المخدومين: <span style={{color:TEXT}}>{new Set(brEv.map(e=>e.client_id)).size}</span></div>
         </div>
       </div>);
     })}
+    {visBranches.length === 0 && <div className="es" style={{gridColumn:"1/-1"}}><div>📈</div><div style={{marginTop:6}}>لا توجد بيانات</div></div>}
   </div>);
 }
 
@@ -885,7 +941,7 @@ export default function App() {
       case "payments":  return <Payments  {...p} setPayments={setPayments} />;
       case "expenses":  return <Expenses  {...p} setExpenses={setExpenses} />;
       case "inventory": return <Inventory {...p} setInventory={setInventory} />;
-      case "reports":   return <Reports   branches={branches} events={events} expenses={expenses} />;
+      case "reports":   return <Reports   branch={branch} branches={branches} events={events} expenses={expenses} isOwner={isOwner} />;
       case "branches":  return <BranchesPage branches={branches} setBranches={setBranches} users={users} setUsers={setUsers} toast={toast} />;
       case "profile":   return <ProfilePage user={currentUser} users={users} setUsers={setUsers} branches={branches} toast={toast} />;
       default: return null;
